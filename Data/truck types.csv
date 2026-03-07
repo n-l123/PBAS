@@ -1,0 +1,7 @@
+Trucktype,Capacity Ambient,Cost per km,Cost per hour,kg CO2 emission per km,Unloading time at store in min
+Small,18,0.35,35,0.4,30
+Rigid,30,0.4,40,0.65,30
+City,45,0.48,48,0.8,30
+Euro,54,0.6,60,1.1,30
+Electric Small*,14,0.4,40,0,30
+Electric Big*,36,0.55,55,0,30

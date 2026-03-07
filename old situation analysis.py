@@ -148,5 +148,5 @@ ax.spines['bottom'].set_color('#003B64')
 ax.tick_params(colors='#003B64', which='both')
 
 plt.tight_layout()
-plt.savefig('capacity_vs_volume.png', dpi=300)
+plt.savefig('plots/capacity_vs_volume.png', dpi=300)
 print("Chart created successfully as capacity_vs_volume.png")
