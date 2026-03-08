@@ -2,16 +2,20 @@ import pandas as pd
 import numpy as np
 import itertools
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 # 1. Load the new clean CSV data
 schedule_df = pd.read_csv('data/old.csv')
 stores_df = pd.read_csv('data/store general.csv')
 trucks_df = pd.read_csv('data/truck types.csv')
+info_df = pd.read_csv('data/information dc.csv', header=None, index_col=0)
+info_df = info_df.T
 
 # Clean column names just in case there are trailing spaces
 schedule_df.columns = schedule_df.columns.str.strip()
 stores_df.columns = stores_df.columns.str.strip()
 trucks_df.columns = trucks_df.columns.str.strip()
+info_df.columns = info_df.columns.str.strip()
 
 # 2. Filter out electric trucks for the baseline
 traditional_trucks = trucks_df[~trucks_df['Trucktype'].str.contains('Electric', na=False, case=False)].copy()
@@ -124,7 +128,57 @@ day_order = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 df['Day of Week'] = pd.Categorical(df['Day of Week'], categories=day_order, ordered=True)
 daily_stats = df.groupby('Day of Week', observed=False)[['Total volume', 'Dispatched Capacity']].sum().reset_index()
 
-# 9. Generate and save the bar chart
+
+# Function to calculate distance between two GPS coordinates
+def store_distance(lat1, lon1, lat2, lon2):
+    R = 6371.0 # Earth radius in kilometers
+    lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = np.sin(dlat/2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2)**2
+    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1-a))
+    return R * c
+
+# 3. Calculate distance to the nearest neighboring store for every store
+lats = stores_df['Latitude'].values
+lons = stores_df['Longitude'].values
+n = len(stores_df)
+min_dists = []
+nearest_neighbors_types = []
+
+for i in range(n):
+    dists = store_distance(lats[i], lons[i], lats, lons)
+    dists[i] = np.inf # Ignore distance to itself
+    min_idx = np.argmin(dists)
+    min_dists.append(np.min(dists))
+    nearest_neighbors_types.append(stores_df['Max. allowed truck type'].iloc[min_idx])
+    
+
+stores_df['Nearest Neighbor (km)'] = min_dists
+stores_df['Nearest_Store_Type'] = nearest_neighbors_types
+avg_dist = np.mean(min_dists)
+
+# Check how many stores share the SAME truck type as their closest neighbor
+stores_df['Same_Truck_Type_As_Neighbor'] = stores_df['Max. allowed truck type'] == stores_df['Nearest_Store_Type']
+
+# print metrics about nearest neighbor distances
+print(f"Average distance to nearest store: {avg_dist:.2f} km")
+pct_within_10km = (np.array(min_dists) <= 10).mean() * 100
+pct_within_5km = (np.array(min_dists) <= 5).mean() * 100
+print(f"Stores within 10km of another store: {pct_within_10km:.1f}%")
+print(f"Stores within 5km of another store: {pct_within_5km:.1f}%")
+print("Store Types Breakdown:")
+print(stores_df['Max. allowed truck type'].value_counts())
+print("\nNeighbors with same truck type:")
+same_type_pct = stores_df['Same_Truck_Type_As_Neighbor'].mean() * 100
+print(f"{same_type_pct:.1f}% of stores have the SAME truck restriction as their nearest neighbor.")
+# only at the stores that are close
+print("\nFor stores that are within 5km of another store:")
+close_stores = stores_df[stores_df['Nearest Neighbor (km)'] <= 5]
+close_same_type_pct = close_stores['Same_Truck_Type_As_Neighbor'].mean() * 100
+print(f"Of the stores within 5km of each other, {close_same_type_pct:.1f}% have the SAME truck restriction.")
+
+#  Generate and save the bar chart of Total Volume vs Dispatched Capacity
 fig, ax = plt.subplots(figsize=(10, 6))
 x = np.arange(len(daily_stats['Day of Week']))
 width = 0.35
@@ -150,3 +204,44 @@ ax.tick_params(colors='#003B64', which='both')
 plt.tight_layout()
 plt.savefig('plots/capacity_vs_volume.png', dpi=300)
 print("Chart created successfully as capacity_vs_volume.png")
+
+
+# Map of Stores and DC
+plt.figure(figsize=(10, 8))
+sns.scatterplot(data=stores_df, x='Longitude', y='Latitude', size='Distance to DC (km)', sizes=(20, 200), color='blue', alpha=0.6)
+
+dc_lon = info_df['Longitude'].iloc[0]
+dc_lat = info_df['Latitude'].iloc[0]
+plt.scatter(dc_lon, dc_lat, color='red', marker='*', s=400, label='DC (Distribution Center)')
+plt.title('Geographical Network: Stores relative to Distribution Center')
+plt.xlabel('Longitude')
+plt.ylabel('Latitude')
+plt.legend()
+plt.grid(True, linestyle='--', alpha=0.5)
+plt.tight_layout()
+plt.savefig('plots/store_map.png')
+plt.close()
+
+# Bar chart of truck restrictions among neighboring stores
+plt.figure(figsize=(8, 6))
+sns.countplot(data=close_stores, x='Max. allowed truck type', hue='Same_Truck_Type_As_Neighbor', palette='Set2')
+plt.title('Truck Restrictions among Clustered Stores (< 5km apart)')
+plt.xlabel('Maximum Allowed Truck Type')
+plt.ylabel('Number of Stores')
+plt.legend(title='Shares Restriction\nwith Nearest Neighbor', labels=['Different', 'Same'])
+plt.tight_layout()
+plt.savefig('plots/neighbor_truck_types.png')
+plt.close()
+
+# Pie Chart of the Store Types
+type_counts = stores_df['Max. allowed truck type'].value_counts()
+
+plt.figure(figsize=(8, 8))
+plt.pie(type_counts, labels=type_counts.index, autopct='%1.1f%%', startangle=140, 
+        colors=['#2ca02c', '#ff7f0e', '#1f77b4', '#d62728'],
+        explode=[0.05, 0, 0, 0], shadow=False)
+plt.title('Network Flexibility: Store Access Restrictions', fontsize=16, fontweight='bold', pad=20)
+plt.legend(title='Max Allowed Truck', loc="best")
+plt.tight_layout()
+plt.savefig('plots/store_types_pie.png')
+plt.close()
