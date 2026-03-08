@@ -238,7 +238,7 @@ type_counts = stores_df['Max. allowed truck type'].value_counts()
 
 plt.figure(figsize=(8, 8))
 plt.pie(type_counts, labels=type_counts.index, autopct='%1.1f%%', startangle=140, 
-        colors=['#2ca02c', '#ff7f0e', '#1f77b4', '#d62728'],
+        colors=['#99DDF4', '#00ADE6', '#0072CE', '#003B64'],
         explode=[0.05, 0, 0, 0], shadow=False)
 plt.title('Network Flexibility: Store Access Restrictions', fontsize=16, fontweight='bold', pad=20)
 plt.legend(title='Max Allowed Truck', loc="best")
