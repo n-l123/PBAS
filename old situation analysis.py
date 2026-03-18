@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import itertools
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 import seaborn as sns
 
 # 1. Load the new clean CSV data
@@ -203,8 +204,6 @@ ax.tick_params(colors='#003B64', which='both')
 
 plt.tight_layout()
 plt.savefig('plots/capacity_vs_volume.png', dpi=300)
-print("Chart created successfully as capacity_vs_volume.png")
-
 
 # Map of Stores and DC
 plt.figure(figsize=(10, 8))
@@ -245,3 +244,62 @@ plt.legend(title='Max Allowed Truck', loc="best")
 plt.tight_layout()
 plt.savefig('plots/store_types_pie.png')
 plt.close()
+
+# Donut chart of nearest neighbor truck type similarity
+sizes = [
+    stores_df['Same_Truck_Type_As_Neighbor'].mean() * 100,
+    100 - stores_df['Same_Truck_Type_As_Neighbor'].mean() * 100
+]
+fig, ax = plt.subplots(figsize=(8, 6))
+wedges, texts, autotexts = ax.pie(
+    sizes, 
+    labels=['Same Truck Restriction\nas Nearest Neighbor', 'Different Restriction'], 
+    autopct='%1.1f%%', 
+    startangle=140, 
+    colors=['#0072CE', '#E0E0E0'], 
+    wedgeprops=dict(width=0.4, edgecolor='white', linewidth=3), # 'width' creates the donut hole
+    textprops=dict(fontsize=12, fontweight='bold', color='#003B64')
+)
+
+# Text on chart
+autotexts[0].set_color('black')
+autotexts[0].set_fontsize(16)
+autotexts[1].set_color('black')
+autotexts[1].set_fontsize(14)
+plt.text(0, 0, 'High\nCompatibility', ha='center', va='center', fontsize=14, fontweight='bold', color='#003B64')
+plt.title('Store Compatibility for Neighboring Stores', fontsize=16, fontweight='bold', color='#003B64', pad=20)
+plt.tight_layout()
+plt.savefig('plots/neighbor_compatibility_donut.png')
+plt.close()
+
+# Store to neighbor heatmap
+matrix = pd.crosstab(
+    stores_df['Max. allowed truck type'], 
+    stores_df['Nearest_Store_Type'], 
+    margins=True, 
+    margins_name='Total'
+)
+ordered_cols = ['Euro', 'City', 'Small', 'Rigid', 'Total']
+matrix = matrix.reindex(index=ordered_cols, columns=ordered_cols, fill_value=0)
+
+fig, ax = plt.subplots(figsize=(10, 8))
+sns.heatmap(matrix, annot=True, cmap='Blues', fmt='d', linewidths=2, linecolor='white', cbar=False,
+            annot_kws={'size': 16, 'weight': 'bold'}, ax=ax)
+for i in range(4): # fpr every type
+    # Draw a rectangle on cell (i, i)
+    rect = patches.Rectangle((i, i), 1, 1, fill=False, edgecolor='#FF7F0E', lw=4, zorder=10)
+    ax.add_patch(rect)
+# extra text box
+math_text = "Highlighted Diagonal:\n28 + 1 = 29 Compatible Stores\n\n(29 / 49 Total = 59.2%)"
+props = dict(boxstyle='round', facecolor='white', alpha=0.9, edgecolor='#FF7F0E', lw=2)
+ax.text(1.05, 0.5, math_text, transform=ax.transAxes, fontsize=14,
+        verticalalignment='center', bbox=props, fontweight='bold', color='#003B64')
+plt.title('Store-to-Neighbor Access Matrix\nShowing the 59.2% Compatible Pairs', 
+          fontsize=16, fontweight='bold', color='#003B64', pad=20)
+plt.xlabel('Nearest Neighbor Maximum Truck Allowed', fontsize=12, fontweight='bold', color='#003B64')
+plt.ylabel('Store Maximum Truck Allowed', fontsize=12, fontweight='bold', color='#003B64')
+plt.yticks(rotation=0)
+plt.subplots_adjust(right=0.75) 
+plt.savefig('plots/heatmap_with_totals_highlighted.png', bbox_inches='tight', dpi=300)
+plt.close()
+
